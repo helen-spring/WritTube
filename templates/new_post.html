@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{% if edit == False %}Новая запись{% else %}Редактирование записи{% endif %}{% endblock %}
+{% block header %}{% if edit == False %}Новая запись{% else %}Редактирование записи{% endif %}{% endblock %}
+{% block content %}
+
+<div class="row justify-content-center">
+    <div class="col-md-8 p-5">
+        <div class="card">
+            <div class="card-header">
+                {% if edit == False %}
+                    Добавление новой
+                {% else %}
+                    Редактирование
+                {% endif %}
+                    записи
+            </div>
+            <div class="card-body">
+
+                    {% for error in form.errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+            {% if user.is_authenticated %}
+                <form action="" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ next }}">
+                    <div class="form-group row">
+                        <label for="{{ form.group.label }}" class="col-md-4 col-form-label text-md-right">{{ form.group.label }}:</label>
+                        <div class="col-md-6">
+                            {{ form.group }}
+                            <p class="help">{{ form.group.help_text|safe }}</p>
+                        </div>
+                    </div>
+
+                    <div class="form-group row">
+                        <label for="{{ form.text.label }}" class="col-md-4 col-form-label text-md-right">{{ form.text.label }}:</label>
+                        <div class="col-md-6">
+                            {{ form.text }}
+                            <p class="help">{{ form.text.help_text|safe }}</p>
+                        </div>
+                    </div>
+                    <div class="form-group row">
+                        <label for="{{ form.image.label }}" class="col-md-4 col-form-label text-md-right">{{ form.image.label }}:</label>
+                        <div class="col-md-6">
+                            {{ form.image }}
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="display: block; margin-left: auto; margin-right: auto">
+                    {% if edit == False %}
+                        Добавить
+                    {% else %}
+                        Сохранить
+                    {% endif %}
+                    </button>
+                </form>
+            {% else %}
+            <div class="alert alert-info" role="alert">
+                Вы обратились к странице, доступ к которой возможен только для залогиненных пользователей.<br>
+                Пожалуйста, авторизуйтесь.
+            </div>
+            {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
