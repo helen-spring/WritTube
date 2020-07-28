@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase, Client
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from .models import Post, Group
 
@@ -26,7 +27,6 @@ class PostTest(TestCase):
         )
 
     def url_check(self, url, group, user, text):
-        cache.clear()
         response = self.client_auth.get(url)
         if 'paginator' in response.context:
             current_post = response.context['paginator'].object_list.first()
@@ -62,6 +62,13 @@ class PostTest(TestCase):
         self.assertEqual(post.author, self.user)
         self.assertEqual(post.group, self.group)
 
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    })
+    # у меня так оба теста падают (и у большинства моих однокурсников)
+    # наведите, пожалуйста, на мысль, где ошибка
     def test_post_on_pages(self):
         post = Post.objects.create(
             text="тест тест",
@@ -91,6 +98,11 @@ class PostTest(TestCase):
         expected_url = reverse('login') + "?next=" + reverse('new_post')
         self.assertRedirects(response, expected_url)
 
+    @override_settings(CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    })
     def test_edit(self):
         group2 = Group.objects.create(
             title="вторая группа",
@@ -131,47 +143,57 @@ class PostTest(TestCase):
 
     def test_image(self):
         """Проверка загрузки графического файла"""
-        with open('media/posts/file.jpeg', 'rb') as img:
-            response = self.client_auth.post(
-                reverse('new_post'),
-                {
-                    'text': 'проверка изображения',
-                    'group': self.group.id,
-                    'image': img
-                },
-                follow=True
-            )
-            self.assertEqual(response.status_code, 200)
-            post = Post.objects.first()
-            for url in (
-                    reverse('index'),
-                    reverse('profile', kwargs={'username': 'james'}),
-                    reverse('group', kwargs={'slug': 'test_group'}),
-                    reverse(
-                        'post', kwargs={
-                            'username': 'james', 'post_id': post.id
-                        }
-                    )
-            ):
-                response = self.client_auth.get(url)
-                self.assertContains(response, '<img class')
+        img = SimpleUploadedFile(
+            name='test_image.jpeg',
+            content=open('media/posts/file.jpeg', 'rb').read(),
+            content_type='image/jpeg'
+        )
+        response = self.client_auth.post(
+            reverse('new_post'),
+            {
+                'text': 'проверка изображения',
+                'group': self.group.id,
+                'image': img
+            },
+            follow=True
+        )
+        self.assertEqual(response.status_code, 200)
+        post = Post.objects.first()
+        cache.clear()
+        for url in (
+                reverse('index'),
+                reverse('profile', kwargs={'username': 'james'}),
+                reverse('group', kwargs={'slug': 'test_group'}),
+                reverse(
+                    'post', kwargs={
+                        'username': 'james', 'post_id': post.id
+                    }
+                )
+        ):
+            response = self.client_auth.get(url)
+            self.assertContains(response, '<img class')
 
     def test_upload(self):
         """Проверка, что неграфический файл не загрузится."""
-        with open('media/posts/document.doc', 'rb') as img:
-            response = self.client_auth.post(
-                reverse('new_post'),
-                {
-                    'text': 'проверка изображения',
-                    'group': self.group.id,
-                    'author': self.user,
-                    'image': img
-                }
-            )
-            self.assertNotContains(response, '<img class')
+        txt = SimpleUploadedFile(
+            name='test_text.txt',
+            content=b'abc',
+            content_type='text/plain'
+        )
+        response = self.client_auth.post(
+            reverse('new_post'),
+            {
+                'text': 'проверка изображения',
+                'group': self.group.id,
+                'author': self.user,
+                'image': txt
+            }
+        )
+        self.assertNotContains(response, '<img class')
 
     def test_cache_index(self):
         """Проверка, что главная странийа кэшируется."""
+        cache.clear()
         post = Post.objects.create(
             text="проверка кэша",
             author=self.user,
@@ -186,28 +208,35 @@ class PostTest(TestCase):
         )
         response2 = self.client_auth.get(reverse('index'))
         self.assertNotContains(response2, post2.text)
+        cache.clear()
+        response2 = self.client_auth.get(reverse('index'))
+        self.assertContains(response2, post2.text)
 
     def test_auth_follow(self):
         """Авторизованный пользователь может подписываться
            на других пользователей и удалять их из подписок."""
-        self.client_auth.get(
+        response = self.client_auth.get(
             reverse(
                 'profile_follow', kwargs={
                     'username': 'dostoevsky'
                 }
-            )
+            ),
+            follow=True
         )
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(
             self.author.following.get(user=self.user).user,
             self.user
         )
-        self.client_auth.get(
+        response = self.client_auth.get(
             reverse(
                 'profile_unfollow', kwargs={
                     'username': 'dostoevsky'
                 }
-            )
+            ),
+            follow=True
         )
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(
             self.author.following.count(), 0
         )
@@ -215,7 +244,7 @@ class PostTest(TestCase):
     def test_follow_index(self):
         """Новая запись пользователя появляется в ленте тех,
            кто на него подписан"""
-        self.new_user = User.objects.create_user(
+        new_user = User.objects.create_user(
             username="homer",
             email="homer@gmail.com"
         )
@@ -236,7 +265,7 @@ class PostTest(TestCase):
         self.assertContains(response, new_post.text)
         # Неподписанный пользователь
         self.client_auth.logout()
-        self.client_auth.force_login(self.new_user)
+        self.client_auth.force_login(new_user)
         response = self.client_auth.get(
             reverse('follow_index')
         )
