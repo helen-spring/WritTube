@@ -52,7 +52,7 @@ def profile(request, username):
     followers = user.following.count()
     followings = user.follower.count()
     if request.user.is_authenticated:
-        following = user.following.filter(user=request.user)
+        following = user.following.filter(user=request.user).exists()
     else:
         following = False
     paginator = Paginator(user_posts, 10)

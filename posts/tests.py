@@ -3,6 +3,8 @@ from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
+from io import BytesIO
+from PIL import Image
 from .models import Post, Group
 
 User = get_user_model()
@@ -25,6 +27,7 @@ class PostTest(TestCase):
             username="dostoevsky",
             email="dostoevsky@gmail.com"
         )
+        cache.clear()
 
     def url_check(self, url, group, user, text):
         response = self.client_auth.get(url)
@@ -67,9 +70,8 @@ class PostTest(TestCase):
             'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
         }
     })
-    # у меня так оба теста падают (и у большинства моих однокурсников)
-    # наведите, пожалуйста, на мысль, где ошибка
     def test_post_on_pages(self):
+        cache.clear()
         post = Post.objects.create(
             text="тест тест",
             author=self.user,
@@ -143,22 +145,20 @@ class PostTest(TestCase):
 
     def test_image(self):
         """Проверка загрузки графического файла"""
+        file = BytesIO()
+        image = Image.new('RGBA', size=(100, 100), color=(155, 0, 0))
+        image.save(file, 'png')
+        file.name = 'test.png'
+        file.seek(0)
         img = SimpleUploadedFile(
-            name='test_image.jpeg',
-            content=open('media/posts/file.jpeg', 'rb').read(),
-            content_type='image/jpeg'
+            file.name, file.read(), content_type='image/png'
         )
-        response = self.client_auth.post(
-            reverse('new_post'),
-            {
-                'text': 'проверка изображения',
-                'group': self.group.id,
-                'image': img
-            },
-            follow=True
+        post = Post.objects.create(
+            text="проверка изображения",
+            author=self.user,
+            group=self.group,
+            image=img
         )
-        self.assertEqual(response.status_code, 200)
-        post = Post.objects.first()
         cache.clear()
         for url in (
                 reverse('index'),
@@ -214,7 +214,7 @@ class PostTest(TestCase):
 
     def test_auth_follow(self):
         """Авторизованный пользователь может подписываться
-           на других пользователей и удалять их из подписок."""
+           на других пользователей."""
         response = self.client_auth.get(
             reverse(
                 'profile_follow', kwargs={
@@ -228,6 +228,10 @@ class PostTest(TestCase):
             self.author.following.get(user=self.user).user,
             self.user
         )
+
+    def test_auth_unfollow(self):
+        """Авторизованный пользователь может
+           удалять авторов из подписок."""
         response = self.client_auth.get(
             reverse(
                 'profile_unfollow', kwargs={
@@ -244,10 +248,6 @@ class PostTest(TestCase):
     def test_follow_index(self):
         """Новая запись пользователя появляется в ленте тех,
            кто на него подписан"""
-        new_user = User.objects.create_user(
-            username="homer",
-            email="homer@gmail.com"
-        )
         self.client_auth.get(
             reverse(
                 'profile_follow', kwargs={
@@ -263,9 +263,20 @@ class PostTest(TestCase):
             reverse('follow_index')
         )
         self.assertContains(response, new_post.text)
-        # Неподписанный пользователь
+
+    def test_non_follow_index(self):
+        """Новая запись пользователя не появляется
+           в ленте пользователя, который не подписан."""
         self.client_auth.logout()
+        new_user = User.objects.create_user(
+            username="homer",
+            email="homer@gmail.com"
+        )
         self.client_auth.force_login(new_user)
+        new_post = Post.objects.create(
+            text="проверка подписки",
+            author=self.author
+        )
         response = self.client_auth.get(
             reverse('follow_index')
         )
@@ -277,7 +288,7 @@ class PostTest(TestCase):
             text="проверка коммента",
             author=self.user
         )
-        self.client_auth.post(
+        response = self.client_auth.post(
             reverse(
                 'add_comment', kwargs={
                     'username': 'james', 'post_id': post.id
@@ -285,8 +296,10 @@ class PostTest(TestCase):
             ),
             {
                 "text": "коммент"
-            }
+            },
+            follow=True
         )
+        self.assertEqual(response.status_code, 200)
         resp = self.client_auth.get(
             reverse('post', kwargs={'username': 'james', 'post_id': post.id})
         )
@@ -298,7 +311,7 @@ class PostTest(TestCase):
             text="проверка коммента",
             author=self.user
         )
-        self.client_unauth.post(
+        response = self.client_unauth.post(
             reverse(
                 'add_comment', kwargs={
                     'username': 'james', 'post_id': post.id
@@ -306,8 +319,10 @@ class PostTest(TestCase):
             ),
             {
                 "text": "comm_unath"
-            }
+            },
+            follow=True
         )
+        self.assertEqual(response.status_code, 200)
         resp = self.client_auth.get(
             reverse('post', kwargs={'username': 'james', 'post_id': post.id})
         )
