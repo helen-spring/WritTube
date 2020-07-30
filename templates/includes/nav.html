@@ -4,7 +4,7 @@
         {% if user.is_authenticated %}
         Пользователь: {{ user.username }}.
         <a class="p-2 text-dark" href="{% url 'new_post' %}">Новая запись</a>
-        <a class="p-2 text-dark" href="{% url 'password_change_form' %}">Изменить пароль</a>
+        <a class="p-2 text-dark" href="{% url 'password_change' %}">Изменить пароль</a>
         <a class="p-2 text-dark" href="{% url 'logout' %}">Выйти</a>
         {% else %}
         <a class="p-2 text-dark" href="{% url 'login' %}">Войти</a> |
