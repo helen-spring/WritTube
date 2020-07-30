@@ -5,9 +5,15 @@ from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from io import BytesIO
 from PIL import Image
-from .models import Post, Group
+from .models import Post, Group, Follow, Comment
 
 User = get_user_model()
+
+CACHE_DEFAULT = {
+    'default': {
+            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        }
+    }
 
 
 class PostTest(TestCase):
@@ -40,6 +46,7 @@ class PostTest(TestCase):
         self.assertEqual(current_post.author, user)
 
     def test_profile(self):
+        """Проверка страницы профиля автора"""
         response = self.client_auth.get(
             reverse('profile', kwargs={'username': 'james'})
         )
@@ -50,6 +57,8 @@ class PostTest(TestCase):
         )
 
     def test_new_post_authorized(self):
+        """Авторизованный пользователь
+           может создавать пост"""
         response = self.client_auth.post(
             reverse('new_post'),
             data={
@@ -65,12 +74,10 @@ class PostTest(TestCase):
         self.assertEqual(post.author, self.user)
         self.assertEqual(post.group, self.group)
 
-    @override_settings(CACHES={
-        'default': {
-            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
-        }
-    })
+    @override_settings(CACHES=CACHE_DEFAULT)
     def test_post_on_pages(self):
+        """Пост отображается на всех
+           связанных страницах"""
         cache.clear()
         post = Post.objects.create(
             text="тест тест",
@@ -90,6 +97,8 @@ class PostTest(TestCase):
             self.url_check(url, post.group, post.author, post.text)
 
     def test_new_post_unauthorized(self):
+        """Неавторизованный пользователь не может
+           создать пост"""
         response = self.client_unauth.post(
             reverse('new_post'),
             {
@@ -100,12 +109,9 @@ class PostTest(TestCase):
         expected_url = reverse('login') + "?next=" + reverse('new_post')
         self.assertRedirects(response, expected_url)
 
-    @override_settings(CACHES={
-        'default': {
-            'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
-        }
-    })
+    @override_settings(CACHES=CACHE_DEFAULT)
     def test_edit(self):
+        """Пользователь может редактировать свой пост"""
         group2 = Group.objects.create(
             title="вторая группа",
             slug="sec_group"
@@ -143,6 +149,7 @@ class PostTest(TestCase):
         )
         self.assertNotContains(response, post)
 
+    @override_settings(CACHES=CACHE_DEFAULT)
     def test_image(self):
         """Проверка загрузки графического файла"""
         file = BytesIO()
@@ -248,13 +255,11 @@ class PostTest(TestCase):
     def test_follow_index(self):
         """Новая запись пользователя появляется в ленте тех,
            кто на него подписан"""
-        self.client_auth.get(
-            reverse(
-                'profile_follow', kwargs={
-                    'username': 'dostoevsky'
-                }
-            )
+        follow = Follow.objects.create(
+            user=self.user,
+            author=self.author
         )
+        self.assertEqual(self.user.follower.first(), follow)
         new_post = Post.objects.create(
             text="проверка подписки",
             author=self.author
@@ -300,10 +305,10 @@ class PostTest(TestCase):
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        resp = self.client_auth.get(
-            reverse('post', kwargs={'username': 'james', 'post_id': post.id})
-        )
-        self.assertContains(resp, "коммент")
+        comment = Comment.objects.get(post=post)
+        self.assertEqual(comment.text, "коммент")
+        self.assertEqual(comment.post, post)
+        self.assertEqual(comment.author, self.user)
 
     def test_unauth_comments(self):
         """Неавторизированный пользователь не может комментировать посты"""
@@ -323,6 +328,7 @@ class PostTest(TestCase):
             follow=True
         )
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(Comment.objects.count(), 0)
         resp = self.client_auth.get(
             reverse('post', kwargs={'username': 'james', 'post_id': post.id})
         )
