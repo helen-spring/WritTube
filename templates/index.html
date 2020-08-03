@@ -1,15 +1,38 @@
 {% extends "base.html" %}
-{% block title %}Последние обновления на сайте{% endblock %}
-{% block header %}Последние обновления на сайте{% endblock %}
+{% block title %}Литературный блог{% endblock %}
+{% block header %}Последние записи{% endblock %}
 {% block content %}
 {% load thumbnail %}
 
+<div class="float-menu">
+    <h1>Группы</h1>
+    <ul>
+    {% for group in groups %}
+        <li>
+        <a href="{% url 'group' group.slug %}"> {{ group.title }} </a>
+        </li>
+    <br/>
+    {% endfor %}
+    </ul>
+    <h1>Авторы</h1>
+    <ul>
+    {% for author in authors %}
+        <li>
+        <a href="{% url 'profile' author.username %}"> @{{ author.username }} </a>
+        </li>
+    <br/>
+    {% endfor %}
+    </ul>
+</div>
+
     {% include "includes/menu.html" with index=True %}
 
+<div class="main">
     {% for post in page %}
         {% include "includes/post_item.html" with post=post %}
     {% if not forloop.last %}<hr>{% endif %}
     {% endfor %}
+</div>
 
     {% if page.has_other_pages %}
         {% include "includes/paginator.html" with items=page paginator=paginator %}

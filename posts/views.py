@@ -12,13 +12,24 @@ User = get_user_model()
 @cache_page(20, key_prefix='index_page')
 def index(request):
     post_list = Post.objects.all().select_related("group")
-    paginator = Paginator(post_list, 10)
+    groups = Group.objects.all()
+    authors =[]
+    users = User.objects.all()
+    for user in users:
+        if user.posts.exists():
+            authors.append(user)
+    paginator = Paginator(post_list, 5)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
     return render(
         request,
         "index.html",
-        {"page": page, "paginator": paginator}
+        {
+            "page": page,
+            "paginator": paginator,
+            "groups": groups,
+            "authors": authors
+        }
     )
 
 
