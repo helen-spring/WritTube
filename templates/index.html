@@ -17,10 +17,12 @@
     <h1>Авторы</h1>
     <ul>
     {% for author in authors %}
+        {% if author.posts.first %}
         <li>
-        <a href="{% url 'profile' author.username %}"> @{{ author.username }} </a>
+        <a href="{% url 'profile' author.username %}"> @{{ author.username }}</a>
         </li>
     <br/>
+        {% endif %}
     {% endfor %}
     </ul>
 </div>

@@ -13,11 +13,7 @@ User = get_user_model()
 def index(request):
     post_list = Post.objects.all().select_related("group")
     groups = Group.objects.all()
-    authors =[]
-    users = User.objects.all()
-    for user in users:
-        if user.posts.exists():
-            authors.append(user)
+    authors = User.objects.all()
     paginator = Paginator(post_list, 5)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
