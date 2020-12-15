@@ -2,4 +2,4 @@
 
 Ссылка на проект: https://writtube.ml/
 
-Создана на Django
+Создано на Django
