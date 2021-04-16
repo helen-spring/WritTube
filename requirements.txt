@@ -2,7 +2,7 @@ atomicwrites==1.4.0
 attrs==19.3.0
 colorama==0.4.3
 Django==2.2.9
-django-debug-toolbar==2.2
+django-debug-toolbar==2.2.1
 django-pdb==0.6.2
 more-itertools==8.3.0
 packaging==20.4
